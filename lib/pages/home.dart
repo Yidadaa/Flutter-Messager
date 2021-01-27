@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_chat/components/avatar.dart';
+import 'package:flutter_chat/components/nav.dart';
+import 'package:flutter_chat/components/searchbar.dart';
 
 class HomePage extends StatefulWidget {
   HomePage({Key key}) : super(key: key);
@@ -100,60 +102,19 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildSearchBar() {
-    return Container(
-      padding: EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(50),
-        child: Container(
-          padding: EdgeInsets.symmetric(vertical: 10),
-          width: double.infinity,
-          color: Colors.white,
-          child: Center(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.search,
-                  color: Colors.grey,
-                  size: 20,
-                ),
-                Text(
-                  '搜索',
-                  style: TextStyle(color: Colors.grey),
-                )
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavigationBar() {
-    return BottomNavigationBar(
-      selectedItemColor: Colors.lightBlue,
-      items: [
-        BottomNavigationBarItem(icon: Icon(Icons.message), label: '消息'),
-        BottomNavigationBarItem(icon: Icon(Icons.contact_page), label: '联系人'),
-        BottomNavigationBarItem(icon: Icon(Icons.camera), label: '动态')
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: _buildAppBar(),
       body: Column(
         children: [
-          _buildSearchBar(),
+          SearchBar(),
           Expanded(
             child: _buildListView(),
           )
         ],
       ),
-      bottomNavigationBar: _buildNavigationBar(),
+      bottomNavigationBar: buildNavBar(0, context),
     );
   }
 }
