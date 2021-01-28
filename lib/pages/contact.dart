@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_chat/components/avatar.dart';
 import 'package:flutter_chat/components/nav.dart';
 import 'package:flutter_chat/components/searchbar.dart';
 import 'package:flutter_chat/model/user.dart';
-import 'package:sticky_headers/sticky_headers.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import 'package:flutter/services.dart';
 
 import 'dart:math';
 
@@ -15,8 +17,10 @@ class ContactPage extends StatefulWidget {
 }
 
 class _ContactPageState extends State<ContactPage> {
+  ItemScrollController _itemScrollController = ItemScrollController();
   List<MapEntry<String, List<User>>> _contacts;
-  String _currentHeaderKey = 'A';
+  Map<String, GlobalKey> _sideLocatorKeys = {};
+  String _touchingKey;
 
   @override
   void initState() {
@@ -26,11 +30,13 @@ class _ContactPageState extends State<ContactPage> {
 
   void _loadContacts() {
     List<MapEntry> groupedContacts = Iterable.generate(26).map((i) {
+      String key = String.fromCharCode(i + 65);
+      _sideLocatorKeys[key] = GlobalKey();
       List<User> users = Iterable.generate(Random().nextInt(5) + 1)
           .map((ui) => User('用户名称 $i _$ui', 'assets/avatar.jpg',
               motto: '名人名言' * Random().nextInt(4)))
           .toList();
-      return MapEntry(String.fromCharCode(i + 65), users.toList());
+      return MapEntry(key, users.toList());
     }).toList();
 
     setState(() {
@@ -81,79 +87,97 @@ class _ContactPageState extends State<ContactPage> {
   }
 
   Widget _buildContactList() {
-    return Row(children: [
-      Expanded(
-          child: NotificationListener<ScrollNotification>(
-              onNotification: (notification) {
-                setState(() {});
-                return true;
-              },
-              child: ListView.builder(
-                itemCount: _contacts.length,
-                itemBuilder: (context, index) {
-                  return StickyHeaderBuilder(
-                      builder: (context, amount) {
-                        // set current header key
-                        if (amount >= 0 && amount < 0.1) {
-                          _currentHeaderKey = _contacts[index].key;
-                        }
-                        return Container(
-                          width: double.infinity,
-                          padding:
-                              EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                          color: Colors.white,
-                          child: Text(
-                            _contacts[index].key,
-                            style: TextStyle(
-                                color: amount < 0.1
-                                    ? Colors.lightBlue
-                                    : Colors.black45),
+    return Card(
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        color: Colors.white,
+        child: Row(children: [
+          Expanded(
+              child: ScrollablePositionedList.builder(
+                  itemScrollController: _itemScrollController,
+                  itemCount: _contacts.length,
+                  itemBuilder: (context, index) {
+                    String _listKeyString = _contacts[index].key;
+                    return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            // header text
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 6),
+                            child: Text(_listKeyString,
+                                style: TextStyle(color: Colors.black45)),
                           ),
-                        );
-                      },
-                      content: Card(
-                        elevation: 0,
-                        margin: EdgeInsets.zero,
-                        color: Colors.white,
-                        child: Column(
-                          children: _contacts[index]
-                              .value
-                              .map((user) => ListTile(
-                                    leading: Avatar(
-                                      user.avatar,
-                                      size: 45,
-                                    ),
-                                    title: Text(user.name,
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.bold)),
-                                    subtitle: Text(user.motto ?? '在线中',
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 12)),
-                                    onTap: () {},
-                                  ))
-                              .toList(),
-                        ),
-                      ));
-                },
-              ))),
-      Column(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: _contacts
-              .map((contact) => Padding(
-                    padding: EdgeInsets.symmetric(vertical: 2, horizontal: 5),
-                    child: Text(
-                      contact.key,
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: _currentHeaderKey == contact.key
-                              ? Colors.lightBlue
-                              : Colors.black54),
-                    ),
-                  ))
-              .toList())
-    ]);
+                          Column(
+                            // grouped contacts
+                            children: _contacts[index]
+                                .value
+                                .map((user) => ListTile(
+                                      leading: Avatar(
+                                        user.avatar,
+                                        size: 45,
+                                      ),
+                                      title: Text(user.name,
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold)),
+                                      subtitle: Text(user.motto ?? '在线中',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12)),
+                                      onTap: () {},
+                                    ))
+                                .toList(),
+                          ),
+                        ]);
+                  })),
+          GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onPanStart: (details) {
+                print('start');
+              },
+              onPanUpdate: (details) {
+                MapEntry touchedKey =
+                    _sideLocatorKeys.entries.firstWhere((gKey) {
+                  // Transform global position and check if the pointer inside the box
+                  RenderBox box = gKey.value.currentContext.findRenderObject();
+                  Offset local = box.globalToLocal(details.globalPosition);
+                  return local.dy > 0 && local.dy < box.paintBounds.bottom;
+                }, orElse: () => null);
+                if (touchedKey != null && _touchingKey != touchedKey.key) {
+                  setState(() {
+                    _touchingKey = touchedKey.key;
+                  });
+                  // Jump to responding item group
+                  _itemScrollController.jumpTo(
+                      index: _touchingKey.codeUnitAt(0) - 65);
+                  // HapticFeedback.vibrate();
+                  HapticFeedback.lightImpact();
+                }
+              },
+              onPanEnd: (details) {
+                // Clear touching key
+                setState(() {
+                  _touchingKey = null;
+                });
+              },
+              child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: _contacts
+                      .map((contact) => Padding(
+                            key: _sideLocatorKeys[contact.key],
+                            padding: EdgeInsets.symmetric(horizontal: 10),
+                            child: Text(
+                              contact.key,
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: contact.key == _touchingKey
+                                      ? Colors.lightBlue
+                                      : Colors.black54),
+                            ),
+                          ))
+                      .toList())),
+        ]));
   }
 
   @override
